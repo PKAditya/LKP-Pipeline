@@ -1,6 +1,12 @@
 #!/bin/bash
 
-log=/var/log/lkp-automation-data/pre-reboot-log
+echo "DIR:$1"
+echo "name:$2"
+KERNEL_DIR=$1
+name=$2
+build_home=$3
+
+log="$build_home/lkp-automation-data/logs/pre-reboot-log"
 log() {
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> $log
 }
@@ -9,14 +15,11 @@ handle_error() {
     echo "SETUP Failed, refer $log for the details"
     exit 1
 }
+
+
 log "Entered centos/kernel/config.sh script"
 
-echo "DIR:$1"
-echo "name:$2"
-KERNEL_DIR=$1
-name=$2
-log "Recieved input from previous run, KERNEL_DIR: $1 and name: $2"
-
+log "Recieved input from previous run, KERNEL_DIR: $1, name: $2 and build_home: $3 "
 
 cd $KERNEL_DIR
 log "Current working directory: $KERNEL_DIR"

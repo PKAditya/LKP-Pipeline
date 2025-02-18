@@ -3,8 +3,9 @@
 loc=$1
 KERNEL_DIR=$2
 LOCAL_VERSION=$3
+build_home=$4
 
-log=/var/log/lkp-automation-data/pre-reboot-log
+log="$build_home/lkp-automation-data/logs/pre-reboot-log"
 
 # function defined to log the every step
 log() {
@@ -25,9 +26,9 @@ log "Successfully installed kernel build essential dependencies"
 
 if [[ -d $KERNEL_DIR ]]; then
 	cd "$KERNEL_DIR" || handle_error "Couldn't switch to $KERNEL_DIR, give proper input"
-        $loc/centos/kernel/config.sh $KERNEL_DIR $LOCAL_VERSION || handle_error "Failed running $loc/centos/kernel/config.sh"
+        $loc/centos/kernel/config.sh $KERNEL_DIR $LOCAL_VERSION $build_home || handle_error "Failed running $loc/centos/kernel/config.sh"
 
-	$loc/centos/kernel/install.sh $LOCAL_VERSION || handle_error "Cannot build the configured kernel."
+	$loc/centos/kernel/install.sh $LOCAL_VERSION $build_home|| handle_error "Cannot build the configured kernel."
 else
         handle_error "Failed to change to kernel directory, Directory $KERNEL_DIR doesn't exists"
 fi

@@ -1,7 +1,10 @@
 #!/bin/bash
 
+user=$1
+build_home=$2
+
 # Helpers for logs
-log=/var/log/lkp-automation-data/pre-reboot-log
+log="$build_home/lkp-automation-data/logs/pre-reboot-log"
 log () {
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> $log
 }
@@ -14,7 +17,6 @@ handle_error() {
 
 log "Entered the sudoers.sh script"
 # giving the current user root priviledges
-user=$1
 log "Got $user as input from run.sh"
 log "Giving the user the root privledges"
 sudoers_pattern="^$user[[:space:]]\+ALL=(ALL)[[:space:]]\+ALL"

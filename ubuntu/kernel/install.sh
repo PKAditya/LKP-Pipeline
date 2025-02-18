@@ -1,8 +1,9 @@
 #!/bin/bash
 
 LOCAL_VERSION=$1
+build_home=$2
 # log handling
-log=/var/log/lkp-automation-data/pre-reboot-log
+log="$build_home/lkp-automation-data/logs/pre-reboot-log"
 log() {
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> $log
 }
@@ -24,8 +25,8 @@ make bindeb-pkg -j$(nproc) || handle_error "Building Debian package failed."
 log "Successfully built the debian package"
 KERNEL_PACKAGE=$(find .. -name "linux-image-[0-9]*-auto-base*.deb" -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -f2- -d" ") || handle_error "Cannot find kernel with the mentioned specifications. Kernel finding failed."
 
-log "Copying the kernel package to /var/lib/lkp-automation-data/PACKAGES for further purposes"
-cp $KERNEL_PACKAGE /var/lib/lkp-automation-data/PACKAGES
+log "Copying the kernel package to $build_home/lkp-automation-data/PACKAGES for further purposes"
+cp $KERNEL_PACKAGE $build_home/lkp-automation-data/PACKAGES
 
 
 echo "////////////////////KERNEL_VERSION: $KERNEL_PACKAGE////////////////////////"
@@ -34,16 +35,16 @@ log "Installing the built deb package"
 dpkg -i "$KERNEL_PACKAGE" || handle_error "Failed to install the $KERNEL_PACKAGE deb package"
 log "Installed the built deb package"
 
-touch /var/lib/lkp-automation-data/state-files/kernel-package
-echo "$KERNEL_PACKAGE" > /var/lib/lkp-automation-data/state-files/kernel-package
+touch $build_home/lkp-automation-data/state-files/kernel-package
+echo "$KERNEL_PACKAGE" > $build_home/lkp-automation-data/state-files/kernel-package
 
 log "Extracting kernel version"
 KERNEL_VERSION=$(dpkg-deb -f "$KERNEL_PACKAGE" Version | cut -d'-' -f1) || handle_error "Couldn't capture the installed deb version"
 log "Captured kernel version: $KERNEL_VERSION"
 
-rm /var/lib/lkp-automation-data/state-files/kernel-version &> /dev/null
-touch /var/lib/lkp-automation-data/state-files/kernel-version
-echo "$KERNEL_VERSION" > /var/lib/lkp-automation-data/state-files/kernel-version
+rm $build_home/lkp-automation-data/state-files/kernel-version &> /dev/null
+touch $build_home/lkp-automation-data/state-files/kernel-version
+echo "$KERNEL_VERSION" > $build_home/lkp-automation-data/state-files/kernel-version
 
 echo "version: $KERNEL_VERSION"
 

@@ -8,6 +8,14 @@ import socket
 import re
 import os
 
+try:
+    build_home = sys.argv[1]
+except IndexError:
+    print("Please provide the base directory path as an argument")
+    sys.exit(1)
+
+
+
 def get_hostname():
     try:
         return socket.gethostname()
@@ -154,16 +162,16 @@ def create_excel():
         distro = get_distro()
 
         # Get kernel version
-        kernel_version = get_kernel_version('/var/lib/lkp-automation-data/state-files/kernel-version')
+        kernel_version = get_kernel_version(f'{build_home}/lkp-automation-data/state-files/kernel-version')
 
         # Read all files
-        test_suites = read_file('/var/lib/lkp-automation-data/results/test_suites')
-        base_without_vms = read_file('/var/lib/lkp-automation-data/results/Base-without_vms')
-        patch_without_vms = read_file('/var/lib/lkp-automation-data/results/Patch-without_vms')
-        base_with_vms = read_file('/var/lib/lkp-automation-data/results/Base-with_vms')
-        patch_with_vms = read_file('/var/lib/lkp-automation-data/results/Patch-with_vms')
-        base_with_lkp_vms = read_file('/var/lib/lkp-automation-data/results/Base-with_lkp_vms')
-        patch_with_lkp_vms = read_file('/var/lib/lkp-automation-data/results/Patch-with_lkp_vms')
+        test_suites = read_file(f'{build_home}/lkp-automation-data/results/test_suites')
+        base_without_vms = read_file(f'{build_home}/lkp-automation-data/results/Base-without_vms')
+        patch_without_vms = read_file(f'{build_home}/lkp-automation-data/results/Patch-without_vms')
+        base_with_vms = read_file(f'{build_home}/lkp-automation-data/results/Base-with_vms')
+        patch_with_vms = read_file(f'{build_home}/lkp-automation-data/results/Patch-with_vms')
+        base_with_lkp_vms = read_file(f'{build_home}/lkp-automation-data/results/Base-with_lkp_vms')
+        patch_with_lkp_vms = read_file(f'{build_home}/lkp-automation-data/results/Patch-with_lkp_vms')
 
         # Process test_suites into two columns
         test_suite_col = []
@@ -211,7 +219,7 @@ def create_excel():
         })
 
         # Save to Excel directly in the current directory
-        excel_file = '/var/lib/lkp-automation-data/results/raw-LKP-results.xlsx'
+        excel_file = f'{build_home}/lkp-automation-data/results/raw-LKP-results.xlsx'
         df.to_excel(excel_file, index=False)
 
 # Load the workbook to apply formatting

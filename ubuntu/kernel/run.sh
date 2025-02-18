@@ -3,8 +3,9 @@
 loc=$1
 KERNEL_DIR=$2
 LOCAL_VERSION=$3
+build_home=$4
 
-log=/var/log/lkp-automation-data/pre-reboot-log
+log="$build_home/lkp-automation-data/logs/pre-reboot-log"
 
 # function defined to log the every step
 log() {
@@ -28,11 +29,11 @@ if [[ -d $KERNEL_DIR ]]; then
 	cd "$KERNEL_DIR"
         log "Directory $KERNEL_DIR exists"
 	log "Running the configuration script: $loc/ubuntu/kernel/config.sh"
-        $loc/ubuntu/kernel/config.sh $KERNEL_DIR $LOCAL_VERSION || handle_error "Failed running $loc/ubuntu/kernel/config.sh"
+        $loc/ubuntu/kernel/config.sh $KERNEL_DIR $LOCAL_VERSION $build_home || handle_error "Failed running $loc/ubuntu/kernel/config.sh"
 	log "Successfully ran the configuration"
 
 	log "Proceeding with building the kernel configured with the local version"
-	$loc/ubuntu/kernel/install.sh $LOCAL_VERSION || handle_error "Cannot build the configured kernel."
+	$loc/ubuntu/kernel/install.sh $LOCAL_VERSION $build_home || handle_error "Cannot build the configured kernel."
 else
         handle_error "Failed to change to kernel directory, Directory $KERNEL_DIR doesn't exists"
 fi

@@ -1,6 +1,13 @@
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
+try:
+    build_home = sys.argv[1]
+except IndexError:
+    print("Please provide the base directory path as an argument")
+    sys.exit(1)
+
+
 def calculate_percentage(numerator_val, denominator_val):
     try:
         if denominator_val == 0:
@@ -11,7 +18,7 @@ def calculate_percentage(numerator_val, denominator_val):
         return None
 
 def modify_excel():
-    file_path = "/var/lib/lkp-automation-data/results/raw-LKP-results.xlsx"
+    file_path = f"{build_home}/lkp-automation-data/results/raw-LKP-results.xlsx"
     wb = load_workbook(file_path)
     ws = wb.active
     
@@ -109,7 +116,7 @@ def modify_excel():
             cell.border = thin_border
     
     # Save the modified file
-    wb.save('/var/lib/lkp-automation-data/results/LKP-results.xlsx')
+    wb.save(f'{build_home}/lkp-automation-data/results/LKP-results.xlsx')
     print("File has been modified and saved as 'LKP-results.xlsx'")
 
 # Run the function
