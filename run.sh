@@ -190,6 +190,9 @@ rm $build_home/lkp-automation-data/results/add_variance.py
 cp $loc/main/add_variance.py $build_home/lkp-automation-data/results/add_variance.py
 chmod 777 $build_home/lkp-automation-data/results/add_variance.py
 
+rm $build_home/lkp-automation-data/results/test_suites
+cp $loc/main/test_suites $build_home/lkp-automation-data/results/test_suites
+chmod 777 $build_home/lkp-automation-data/results/test_suites
 
 # creating the service file, for running the lkp on both the kernels.
 
