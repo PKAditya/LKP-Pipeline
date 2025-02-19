@@ -20,10 +20,11 @@ fi
 
 build_home=$1
 echo "BUILD_HOME: $build_home"
+mkdir $build_home/lkp-automation-data
 mkdir $build_home/lkp-automation-data/logs &> /dev/null
 mkdir $build_home/lkp-automation-data/state-files &> /dev/null
 mkdir $build_home/lkp-automation-data/results &> /dev/null
-log="$build_home/lkp-automation-data/logs/pre-reboot-log"
+log=$build_home/lkp-automation-data/logs/pre-reboot-log
 touch $log &> /dev/null
 
 log () {
@@ -64,16 +65,6 @@ echo "Distro found: $distro"
 echo "Current user: $user"
 log "Captured distro: $distro and current user: $user"
 echo " "
-
-# user input
-read -p "Enter kernel repository path: " KERNEL_DIR
-read -p "Enter the branch name with out including the remote repository: " BRANCH
-read -p "Enter the commit sha id of the base_kernel: " BASE_COMMIT
-read -p "Enter the vm name without lkp on it: " VM
-read -p "Enter the vm name with lkp on it: " LKP
-read -p "Enter the number of vms required without lkp on them: " n1
-read -p "Enter the number of vms required with lkp on them: " n2
-
 
 KERNEL_DIR="$build_home/Linux_Backport"
 BRANCH=$2
