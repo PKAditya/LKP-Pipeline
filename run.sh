@@ -187,6 +187,10 @@ touch /var/lib/lkp-automation-data/run.sh
 cp $loc/main/run.sh /var/lib/lkp-automation-data/run.sh
 FILE_PATH="/var/lib/lkp-automation-data/run.sh"
 
+
+cp $loc/main/test_suites  /var/lib/lkp-automation-data/results/test_suites
+
+
 # Defining the main-state
 touch /var/lib/lkp-automation-data/state-files/main-state
 chmod 666 /var/lib/lkp-automation-data/state-files/main-state
