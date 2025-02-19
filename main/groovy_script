@@ -12,7 +12,6 @@ pipeline {
     
     parameters {
         choice(name: 'kernel_type', choices: ['git'], description: 'Type of kernel')
-        string(name: 'kernel_repo', description: 'Path to the kernel repo')
         string(name: 'kernel_branch', description: 'Enter the branch name without remote repository')
         string(name: 'base_commit', description: 'Enter the base commit id')
         string(name: 'normal_vm', description: 'Enter the name of the vm which doesn\'t contain lkp service on it')
