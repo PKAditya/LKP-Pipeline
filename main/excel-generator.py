@@ -169,7 +169,7 @@ def create_excel():
         test_suite_col = []
         test_col = []
         
-        for line in test_suites[1:]:  # Skip header
+        for line in test_suites:  # Process all lines including the first one
             if line.startswith(','):
                 test_suite_col.append('')
                 test_col.append(line[1:])
