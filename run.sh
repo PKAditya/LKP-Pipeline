@@ -52,7 +52,7 @@ log "Captured current distro: $distro, current user: $user"
 
 log "Creating a directory for storing the built packages"
 if [ ! -d "$build_home/lkp-automation-data/PACKAGES" ]; then
-    mkdir -p /lkp-automation-data/PACKAGES &> /dev/null
+    mkdir -p $build_home/lkp-automation-data/PACKAGES &> /dev/null
     log "Created a new directory $build_home/lkp-automation-data/PACKAGES"
 else
     log "Directory $build_home/lkp-automation-data/PACKAGES already exists, deleting the files inside the directory"
@@ -141,6 +141,8 @@ if command -v apt >/dev/null 2>&1; then
 	rm $build_home/lkp-automation-data/run.sh
 	touch $build_home/lkp-automation-data/run.sh
 	cp $loc/main/ubuntu-run.sh $build_home/lkp-automation-data/run.sh
+	cd $KERNEL_DIR
+	make mrproper
 
 elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
 	echo "--------------------------"
@@ -163,6 +165,8 @@ elif command -v dnf >/dev/null 2>&1 || command -v yum >/dev/null 2>&1; then
 	rm $build_home/lkp-automation-data/run.sh
 	touch $build_home/lkp-automation-data/run.sh
 	cp $loc/main/run.sh $build_home/lkp-automation-data/run.sh
+	cd $KERNEL_DIR
+	make mrproper
 
 else
 	handle_error "This system is neither debian nor RHEL. System not supported"
