@@ -7,6 +7,7 @@ import subprocess
 import socket
 import re
 import os
+import sys
 
 try:
     build_home = sys.argv[1]
