@@ -21,3 +21,18 @@ The user needs to provide input required for setting up the system. Required inp
 5. Name of the vm with lkp installed as service on it
 6. Number of required non-lkp vms required (Note that the number of vms could vary depending on the specs of your host system)
 7. Number of required lkp vms required (Note that the number of vms could vary depending on the specs of your host system)
+
+## Supported Distributions
+Present version of code only support the below listed distros:
+
+Debian Based:
+
+- Ubuntu
+- VELinux
+
+RHEL based:
+
+- Centos
+- Opencloudos
+- OpenEuler
+- OpenAnolis
