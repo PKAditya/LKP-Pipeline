@@ -1,23 +1,22 @@
 # LKP-Pipeline
+
 ## Getting Started
-  LKP-Pipeline is designed to help kernel developers with the checks of regression with various test-suites. To start with the run, follow the below steps.
+This branch is created for Jenkins pipeline purposes only. To use this code in Jenkins:
+1. Navigate to the directory named "main"
+2. Copy the contents of the "groovy_script" file to the Jenkins Pipeline script (available at Pipeline/Configuration)
 
-```
+> [!NOTE]
+> Remember to change the node name and BUILD_HOME directory to your desired values.
 
-        # clone the repository
-        git clone https://github.com/PKAditya/LKP-Pipeline.git
+## Supported Distributions
+The current version of the code supports the following distributions:
 
-        cd LKP-Pipeline
-        ./run.sh
+Debian-based:
+- Ubuntu
+- VELinux
 
-```
-
-The user needs to provide input required for setting up the system. Required inputs are listed out below
-
-1. Path to the kernel git repository
-2. Branch of the kernel repository
-3. Base commit of the kernel repository, before applying the patches
-4. Name of the vm without lkp installed as service on it
-5. Name of the vm with lkp installed as service on it
-6. Number of required non-lkp vms required (Note that the number of vms could vary depending on the specs of your host system)
-7. Number of required lkp vms required (Note that the number of vms could vary depending on the specs of your host system)
+RHEL-based:
+- CentOS
+- OpenCloudOS
+- OpenEuler
+- OpenAnolis
