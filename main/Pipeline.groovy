@@ -1,6 +1,6 @@
 pipeline {
     agent {
-        node "Aditya-LKP-Pipeline-system"
+        node "Aditya-Test-System"
     }
     
     environment {
@@ -127,6 +127,7 @@ pipeline {
 			}
 		}
 		
+		
 		stage('Booting System with Base Kernel') {
             steps {
                 script {
@@ -190,7 +191,9 @@ pipeline {
                             if [[ "\$BASE_LOCAL_VERSION" == "\$tmp" ]]; then
                                 echo "Base kernel is installed on the system, starting lkp"
                                 ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
-                                
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
                                 echo "Creating ${params.num_vms} number of ${params.normal_vm} clones"
                                 for((i=2; i<=${params.num_vms}; i++)); do
                                     NEW_VM="${params.normal_vm}\${i}"
@@ -242,7 +245,9 @@ pipeline {
                             if [[ "\$BASE_LOCAL_VERSION" == "\$tmp" ]]; then
                                 echo "Base kernel is installed on the system, starting lkp"
                                 ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
-                                
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
                                 echo "Creating ${params.num_lkp_vms} number of ${params.lkp_vm} clones"
                                 for((i=2; i<=${params.num_lkp_vms}; i++)); do
                                     NEW_VM="${params.lkp_vm}\${i}"
@@ -317,6 +322,9 @@ pipeline {
                             if [[ "\$PATCH_LOCAL_VERSION" == "\$tmp" ]]; then
                                 echo "Kernel with patches is installed on the system, starting lkp"
                                 ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
                                 echo "${BUILD_HOME}/${BUILD_NUMBER}" > /var/local/build_home
                                 ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/lkprun.sh 
                                 PR1="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Patch-without_vms"
@@ -348,7 +356,9 @@ pipeline {
                             if [[ "\$PATCH_LOCAL_VERSION" == "\$tmp" ]]; then
                                 echo "Patches kernel is installed on the system, starting lkp"
                                 ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
-                                
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
                                 echo "Creating ${params.num_vms} number of ${params.normal_vm} clones"
                                 for((i=2; i<=${params.num_vms}; i++)); do
                                     NEW_VM="${params.normal_vm}\${i}"
@@ -400,7 +410,9 @@ pipeline {
                             if [[ "\$PATCH_LOCAL_VERSION" == "\$tmp" ]]; then
                                 echo "Patches kernel is installed on the system, starting lkp"
                                 ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
-                                
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
                                 echo "Creating ${params.num_lkp_vms} number of ${params.lkp_vm} clones"
                                 for((i=2; i<=${params.num_lkp_vms}; i++)); do
                                     NEW_VM="${params.lkp_vm}\${i}"
@@ -469,12 +481,16 @@ pipeline {
                             PATCH_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/patch-kernel-version)
                             old_kernel=/boot/vmlinuz-\$kernel_nameo
                             grubby --set-default=\$old_kernel
+                            grub2-mkconfig -o /boot/grub2/grub.cfg
+                        """
+                        rebootSystem()
+                        sh """
                             base="/boot/vmlinuz-\$BASE_LOCAL_VERSION"
                             yum remove \$base -y
                             patch="/boot/vmlinuz-\$PATCH_LOCAL_VERSION"
                             yum remove \$patch -y
                         """
-						rebootSystem()
+						
 					}	catch ( Exception e ) {
 						error "couldn't install the old kernel on the system"
 					}
