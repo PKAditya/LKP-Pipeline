@@ -53,10 +53,12 @@ update-grub || handle_error "Failed to update GRUB configuration"
 
 # Set the new kernel as default by modifying GRUB_DEFAULT
 KERNEL_PATH=$(find /boot -name "vmlinuz-$KERNEL_VERSION*" -type f | head -n1)
-if [ -n "$KERNEL_PATH" ]; then
-    MENU_ENTRY=$(grep -A1 "menuentry .*$(basename $KERNEL_PATH)" /boot/grub/grub.cfg | head -n1 | cut -d"'" -f2)
+if [ -f "$KERNEL_PATH" ]; then
+    escaped_kernel=$(basename "$KERNEL_PATH" | sed 's/[[\.*^$/]/\\&/g')
+    MENU_ENTRY=$(grep -A1 "menuentry .*${escaped_kernel}" /boot/grub/grub.cfg | head -n1 | cut -d"'" -f2)
     if [ -n "$MENU_ENTRY" ]; then
-        sed -i "s/^GRUB_DEFAULT=.*/GRUB_DEFAULT=\"$MENU_ENTRY\"/" /etc/default/grub
+        escaped_menu=$(echo "$MENU_ENTRY" | sed 's/[[\.*^$/&]/\\&/g')
+        sed -i "s/^GRUB_DEFAULT=.*/GRUB_DEFAULT=\"$escaped_menu\"/" /etc/default/grub
         update-grub || handle_error "Failed to update GRUB after setting default kernel"
     else
         handle_error "Could not find GRUB menu entry for new kernel"
