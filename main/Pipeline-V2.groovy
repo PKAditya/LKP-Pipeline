@@ -1,0 +1,666 @@
+pipeline {
+    agent {
+        node "Aditya-Test-System"
+    }
+    
+    environment {
+        BUILD_HOME = "/vms/jenkins"
+        BUILD_NUMBER = "${env.BUILD_NUMBER}"
+        // Define the token as an environment variable
+        GITHUB_TOKEN = credentials('github-token') // Use Jenkins credentials
+    }
+    
+    parameters {
+        choice(name: 'kernel_type', choices: ['git'], description: 'Type of kernel')
+		choice(name: 'test_scope', choices: ['all', 'Base-Kernel', 'Patches-Kernel'], description: 'Test scope - all tests or base kernel only')
+        string(name: 'kernel_branch', description: 'Enter the branch name without remote repository')
+        string(name: 'base_commit', description: 'Enter the base commit id')
+        string(name: 'normal_vm', description: 'Enter the name of the vm which doesn\'t contain lkp service on it')
+        string(name: 'lkp_vm', description: 'Enter the name of the vm which contain lkp service on it')
+        string(name: 'num_vms', description: 'Enter the number of normal vms required for the stress run')
+        string(name: 'num_lkp_vms', description: 'Enter the number of lkp vms required for the stress run')
+    }
+    
+    stages {
+        stage ('Pipeline Init') {
+            steps {
+                script {
+                    if ( params.kernel_type.contains("git") ) {
+                        echo "Input Parameters received"
+                        echo "kernel_type: ${params.kernel_type}"
+                        echo "kernel_repo: ${params.kernel_repo}"
+                        echo "kernel_branch: ${params.kernel_branch}"
+                        echo "base_commit: ${params.base_commit}"
+                        echo "normal_vm: ${params.normal_vm}"
+                        echo "lkp_vms: ${params.lkp_vm}"
+                        echo "num_vms: ${params.num_vms}"
+                        echo "num_lkp_vms: ${params.num_lkp_vms}"
+                    } else {
+                        echo "Invalid kernel type selected"
+                        echo "Current version of code only supports git kernel type"
+                    }
+                }
+            }
+        }
+        
+        stage ('clone Required repositories')  {
+            steps {
+                script {
+					try {
+						echo "Cloning Linux_Backport repo with only required branch"
+						sh """
+							mkdir -p ${BUILD_HOME}/${BUILD_NUMBER}
+							cd "${BUILD_HOME}/${BUILD_NUMBER}"
+							git clone -b ${params.kernel_branch} --single-branch https://\${GITHUB_TOKEN}@github.com/AMDEPYC/Linux_Backport.git
+							cd "${BUILD_HOME}/${BUILD_NUMBER}/Linux_Backport"
+							git status
+							git config --global --add safe.directory ${BUILD_HOME}/${BUILD_NUMBER}/Linux_Backport
+						"""
+						echo "Cloning the automation script"
+						sh """
+							cd "${BUILD_HOME}/${BUILD_NUMBER}"
+							git clone https://github.com/PKAditya/LKP-Pipeline.git
+							cd "${BUILD_HOME}/${BUILD_NUMBER}/LKP-Pipeline"
+							git status
+							git config --global --add safe.directory ${BUILD_HOME}/${BUILD_NUMBER}/LKP-Pipeline
+						"""
+						echo "Cloning the LKP installation repository"
+						sh """
+							cd "${BUILD_HOME}/${BUILD_NUMBER}"
+							git clone https://github.com/PKumarAditya/LKP_Automated.git
+							cd "${BUILD_HOME}/${BUILD_NUMBER}/LKP_Automated"
+							git config --global --add safe.directory ${BUILD_HOME}/${BUILD_NUMBER}/LKP_Automated
+							
+						"""
+					} catch ( Exception e ) {
+						error "Couldn't clone repositories"
+					}
+                }
+            }
+        }
+		
+		stage ('Validating the input parameters') {
+			steps {
+				script {
+					try {
+						echo "validating the base_commit"
+						echo "checking wheather mentioned vms are present or not"
+						echo "checking wheather mentioned numbers are integers or not"
+						validateAllParameters(params, "${BUILD_HOME}/${BUILD_NUMBER}/Linux_Backport")
+					} catch ( Exception e ) {
+						error "Invalid input parameters"
+					}
+				}
+			}
+		}
+		
+		stage ('Building Base kernel and kernel with patches') {
+			steps {
+				script {
+					try {
+						echo "Building base kernel and kernel with patches"
+						sh """
+							cd "${BUILD_HOME}/${BUILD_NUMBER}/LKP-Pipeline"
+							git switch jenkins
+							./run.sh "${BUILD_HOME}/${BUILD_NUMBER}" ${params.kernel_branch} ${params.base_commit} ${params.normal_vm} ${params.lkp_vm} ${params.num_vms} ${params.num_lkp_vms}
+						"""
+					} catch ( Exception e ) {
+						error "Couldn't create kernel images for base kernel and kernel with patches"
+					}
+				}
+			}
+		}
+		
+		stage ('Installing LKP and required Test-Suites'){
+			steps {
+				script {
+					try {
+						echo "Installing LKP and required test-suites"
+						sh """
+							cd "${BUILD_HOME}/${BUILD_NUMBER}/LKP_Automated"
+							git switch jenkins
+							${BUILD_HOME}/${BUILD_NUMBER}/LKP_Automated/run.sh "${BUILD_HOME}/${BUILD_NUMBER}"
+						"""
+					} catch ( Exception e ) {
+						error "Couldn't install LKP or test-suites required"
+					}
+				}
+			}
+		}
+		
+		
+		stage('Booting System with Base Kernel') {
+			when {
+				expression { params.test_scope != 'Patches-Kernel' }
+			}
+            steps {
+                script {
+                    try {
+                        echo "Booting the kernel with the base kernel"
+                        sh """
+                            BASE_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/base-kernel-version)
+                            echo "BASE_LOCAL_VERSION: \${BASE_LOCAL_VERSION}"
+                            name=/boot/vmlinuz-\$BASE_LOCAL_VERSION
+                            grubby --set-default=\$name
+                            chmod 755 \$name
+                            grub2-mkconfig -o /boot/grub2/grub.cfg
+                        """
+                        rebootSystem()
+                    } catch (Exception e) {
+                        error "Couldn't install base kernel on the system"
+                    }
+                }
+            }
+        }
+		
+		stage ('Running LKP with no vms on base kernel') {
+			when {
+				expression { params.test_scope != 'Patches-Kernel' }
+			}
+			steps {
+				script {
+					try {
+						echo "Checking wheather the system is booted with base kernel"
+						sh """
+                            tmp=\$(uname -r)
+                            BASE_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/base-kernel-version)
+                            if [[ "\$BASE_LOCAL_VERSION" == "\$tmp" ]]; then
+                                echo "Base kernel is installed on the system, starting lkp"
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
+                                echo "${BUILD_HOME}/${BUILD_NUMBER}" > /var/local/build_home
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/lkprun.sh 
+                                BR1="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Base-without_vms"
+                                touch \$BR1
+                                echo "Base-Without vms" > \$BR1
+                                cat /lkp/result/test.result >> \$BR1
+                                cd "${BUILD_HOME}/${BUILD_NUMBER}/results"
+                                mkdir base-no-vms
+                                mv hackbench base-no-vms/
+                                mv ebizzy base-no-vms/
+                                mv unixbench base-no-vms/
+                            fi
+                        """
+					}  catch ( Exception e ) {
+						error "Couldn't run LKP on Base kernel"
+					}
+				}
+			}
+		}
+		
+		stage ('Running LKP with normal vms on base kernel') {
+			when {
+				expression { params.test_scope != 'Patches-Kernel' }
+			}
+			steps {
+				script {
+					try {
+						echo "Checking wheather the system is booted with base kernel"
+						sh """
+                            tmp=\$(uname -r)
+                            BASE_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/base-kernel-version)
+                            if [[ "\$BASE_LOCAL_VERSION" == "\$tmp" ]]; then
+                                echo "Base kernel is installed on the system, starting lkp"
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
+                                echo "Creating ${params.num_vms} number of ${params.normal_vm} clones"
+                                for((i=2; i<=${params.num_vms}; i++)); do
+                                    NEW_VM="${params.normal_vm}\${i}"
+                                    virt-clone --original "${params.normal_vm}" --name "\$NEW_VM" --auto-clone
+                                done
+                                
+                                echo "Starting cloned vms"
+                                virsh start ${params.normal_vm}
+                                for((i=2; i<=${params.num_vms}; i++)); do
+                                    NEW_VM="${params.normal_vm}\${i}"
+                                    virsh start \$NEW_VM
+                                done
+                                
+                                echo "${BUILD_HOME}/${BUILD_NUMBER}" > /var/local/build_home
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/lkprun.sh 
+                                BR2="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Base-with_vms"
+                                touch \$BR2
+                                echo "Base-With ${params.num_vms} vms" > \$BR2
+                                cat /lkp/result/test.result >> \$BR2
+                                cd "${BUILD_HOME}/${BUILD_NUMBER}/results"
+                                mkdir base-normal-vms
+                                mv hackbench base-normal-vms/
+                                mv ebizzy base-normal-vms/
+                                mv unixbench base-normal-vms/
+                                
+                                for((i=2; i<=${params.num_vms}; i++)); do
+                                    NEW_VM="${params.normal_vm}\${i}"
+                                    virsh destroy \$NEW_VM
+                                    virsh undefine \$NEW_VM --remove-all-storage
+                                    echo "\$NEW_VM is deleted"
+                                done
+                            fi
+                        """
+					}   catch ( Exception e ) {
+						error "Couldn't run LKP on Base kernel"
+					}
+				}
+			}
+		}
+		
+		stage ('Running LKP with lkp vms on base kernel') {
+			when {
+				expression { params.test_scope != 'Patches-Kernel' }
+			}
+			steps {
+				script {
+					try {
+						echo "Checking wheather the system is booted with base kernel"
+						sh """
+                            tmp=\$(uname -r)
+                            BASE_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/base-kernel-version)
+                            if [[ "\$BASE_LOCAL_VERSION" == "\$tmp" ]]; then
+                                echo "Base kernel is installed on the system, starting lkp"
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
+                                echo "Creating ${params.num_lkp_vms} number of ${params.lkp_vm} clones"
+                                for((i=2; i<=${params.num_lkp_vms}; i++)); do
+                                    NEW_VM="${params.lkp_vm}\${i}"
+                                    virt-clone --original "${params.lkp_vm}" --name "\$NEW_VM" --auto-clone
+                                done
+                                
+                                echo "Starting cloned vms"
+                                virsh start ${params.lkp_vm}
+                                for((i=2; i<=${params.num_lkp_vms}; i++)); do
+                                    NEW_VM="${params.lkp_vm}\${i}"
+                                    virsh start \$NEW_VM
+                                done
+                                
+                                echo "${BUILD_HOME}/${BUILD_NUMBER}" > /var/local/build_home
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/lkprun.sh 
+                                BR3="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Base-with_lkp_vms"
+                                touch \$BR3
+                                echo "Base-With ${params.num_lkp_vms} lkp vms" > \$BR3
+                                cat /lkp/result/test.result >> \$BR3
+                                cd "${BUILD_HOME}/${BUILD_NUMBER}/results"
+                                mkdir base-lkp-vms
+                                mv hackbench base-lkp-vms/
+                                mv ebizzy base-lkp-vms/
+                                mv unixbench base-lkp-vms/
+                                
+                                for((i=2; i<=${params.num_lkp_vms}; i++)); do
+                                    NEW_VM="${params.lkp_vm}\${i}"
+                                    virsh destroy \$NEW_VM
+                                    virsh undefine \$NEW_VM --remove-all-storage
+                                    echo "\$NEW_VM is deleted"
+                                done
+                            fi
+                        """
+					}   catch ( Exception e ) {
+						error "Couldn't run LKP on Base kernel"
+					}
+				}
+			}
+		}
+		
+		stage ('Booting the system with kernel with patches') {
+			when {
+				expression { params.test_scope != 'Base-Kernel' }
+			}
+			steps {
+				script {
+					try {
+						echo "Booting the system with kernel with patches"
+						sh """
+                            cd "${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files"
+                            PATCH_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/patch-kernel-version)
+                            echo "PATCH_LOCAL_VERSION: \${PATCH_LOCAL_VERSION}"
+                            name=/boot/vmlinuz-\$PATCH_LOCAL_VERSION
+                            grubby --set-default=\$name
+                            chmod 755 \$name
+                            grub2-mkconfig -o /boot/grub2/grub.cfg
+                        """
+						rebootSystem()
+					}   catch ( Exception e ) {
+						error "Couldn't install kernel with patches"
+					}
+				}
+			}
+		}
+		
+		
+		stage ('Running LKP with no vms on patches kernel') {
+			when {
+				expression { params.test_scope != 'Base-Kernel' }
+			}
+			steps {
+				script {
+					try {
+						echo "Checking wheather the system is booted with patches kernel"
+						sh """
+                            tmp=\$(uname -r)
+                            PATCH_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/patch-kernel-version)
+                            if [[ "\$PATCH_LOCAL_VERSION" == "\$tmp" ]]; then
+                                echo "Kernel with patches is installed on the system, starting lkp"
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
+                                echo "${BUILD_HOME}/${BUILD_NUMBER}" > /var/local/build_home
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/lkprun.sh 
+                                PR1="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Patch-without_vms"
+                                touch \$PR1
+                                echo "Patch-Without vms" > \$PR1
+                                cat /lkp/result/test.result >> \$PR1
+                                cd "${BUILD_HOME}/${BUILD_NUMBER}/results"
+                                mkdir patch-no-vms
+                                mv hackbench patch-no-vms/
+                                mv ebizzy patch-no-vms/
+                                mv unixbench patch-no-vms/
+                            fi
+                        """
+					}   catch ( Exception e ) {
+						error "Couldn't run LKP on Patches kernel"
+					}
+				}
+			}
+		}
+		
+		stage ('Running LKP with normal vms on patches kernel') {
+			when {
+				expression { params.test_scope != 'Base-Kernel' }
+			}
+			steps {
+				script {
+					try {
+						echo "Checking wheather the system is booted with patches kernel"
+						sh """
+                            tmp=\$(uname -r)
+                            PATCH_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/patch-kernel-version)
+                            if [[ "\$PATCH_LOCAL_VERSION" == "\$tmp" ]]; then
+                                echo "Patches kernel is installed on the system, starting lkp"
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
+                                echo "Creating ${params.num_vms} number of ${params.normal_vm} clones"
+                                for((i=2; i<=${params.num_vms}; i++)); do
+                                    NEW_VM="${params.normal_vm}\${i}"
+                                    virt-clone --original "${params.normal_vm}" --name "\$NEW_VM" --auto-clone
+                                done
+                                
+                                echo "Starting cloned vms"
+                                virsh start ${params.normal_vm}
+                                for((i=2; i<=${params.num_vms}; i++)); do
+                                    NEW_VM="${params.normal_vm}\${i}"
+                                    virsh start \$NEW_VM
+                                done
+                                
+                                echo "${BUILD_HOME}/${BUILD_NUMBER}" > /var/local/build_home
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/lkprun.sh 
+                                PR2="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Patch-with_vms"
+                                touch \$PR2
+                                echo "Patch-with ${params.num_vms} vms" > \$PR2
+                                cat /lkp/result/test.result >> \$PR2
+                                cd "${BUILD_HOME}/${BUILD_NUMBER}/results"
+                                mkdir patch-normal-vms
+                                mv hackbench patch-normal-vms/
+                                mv ebizzy patch-normal-vms/
+                                mv unixbench patch-normal-vms/
+                                
+                                for((i=2; i<=${params.num_vms}; i++)); do
+                                    NEW_VM="${params.normal_vm}\${i}"
+                                    virsh destroy \$NEW_VM
+                                    virsh undefine \$NEW_VM --remove-all-storage
+                                    echo "\$NEW_VM is deleted"
+                                done
+                            fi
+                        """
+					}	catch ( Exception e ) {
+						error "Couldn't run LKP on Patches kernel"
+					}
+				}
+			}
+		}
+		
+		stage ('Running LKP with lkp vms on patches kernel') {
+			when {
+				expression { params.test_scope != 'Base-Kernel' }
+			}
+			steps {
+				script {
+					try {
+						echo "Checking wheather the system is booted with patches kernel"
+						sh """
+                            tmp=\$(uname -r)
+                            PATCH_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/patch-kernel-version)
+                            if [[ "\$PATCH_LOCAL_VERSION" == "\$tmp" ]]; then
+                                echo "Patches kernel is installed on the system, starting lkp"
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/hackbench"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/ebizzy"
+                                mkdir "${BUILD_HOME}/${BUILD_NUMBER}/results/unixbench"
+                                echo "Creating ${params.num_lkp_vms} number of ${params.lkp_vm} clones"
+                                for((i=2; i<=${params.num_lkp_vms}; i++)); do
+                                    NEW_VM="${params.lkp_vm}\${i}"
+                                    virt-clone --original "${params.lkp_vm}" --name "\$NEW_VM" --auto-clone
+                                done
+                                
+                                echo "Starting cloned vms"
+                                virsh start ${params.lkp_vm}
+                                for((i=2; i<=${params.num_lkp_vms}; i++)); do
+                                    NEW_VM="${params.lkp_vm}\${i}"
+                                    virsh start \$NEW_VM
+                                done
+                                
+                                echo "${BUILD_HOME}/${BUILD_NUMBER}" > /var/local/build_home
+                                ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/lkprun.sh 
+                                PR3="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Patch-with_lkp_vms"
+                                touch \$PR3
+                                echo "Patch-With ${params.num_lkp_vms} lkp vms" > \$PR3
+                                cat /lkp/result/test.result >> \$PR3
+                                cd "${BUILD_HOME}/${BUILD_NUMBER}/results"
+                                mkdir patch-lkp-vms
+                                mv hackbench patch-lkp-vms/
+                                mv ebizzy patch-lkp-vms/
+                                mv unixbench patch-lkp-vms/
+                                
+                                for((i=2; i<=${params.num_lkp_vms}; i++)); do
+                                    NEW_VM="${params.lkp_vm}\${i}"
+                                    virsh destroy \$NEW_VM
+                                    virsh undefine \$NEW_VM --remove-all-storage
+                                    echo "\$NEW_VM is deleted"
+                                done
+                            fi
+                        """
+					}	catch ( Exception e ) {
+						error "Couldn't run LKP on Patches base kernel"
+					}
+				}
+			}
+		}
+		
+		stage ('Creating dummy result files for kernel with patches') {
+			when {
+				expression { params.test_scope == 'Base-Kernel' }
+			}
+			steps {
+				script {
+					sh """
+						PR1="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Patch-without_vms"
+						touch \$PR1
+						echo "Patch-Without vms" > \$PR1
+						PR2="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Patch-with_vms"
+						touch \$PR2
+						echo "Patch-with ${params.num_vms} vms" > \$PR2
+						PR3="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Patch-with_lkp_vms"
+						touch \$PR3
+						echo "Patch-With ${params.num_lkp_vms} lkp vms" > \$PR3
+					"""
+				}
+			}
+		}
+		
+		stage ('Creating dummy result files for base kernel') {
+			when {
+				expression { params.test_scope == 'Patches-kernel' }
+			}
+			steps {
+				script {
+					sh """
+						BR1="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Base-without_vms"
+						touch \$BR1
+						echo "Base-Without vms" > \$BR1
+						BR2="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Base-with_vms"
+						touch \$BR2
+						echo "Base-With ${params.num_vms} vms" > \$BR2
+						BR3="${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/Base-with_lkp_vms"
+						touch \$BR3
+						echo "Base-With ${params.num_lkp_vms} lkp vms" > \$BR3
+					"""
+				}
+			}
+		}
+		
+		stage ('Generating Results') {
+			steps {
+				script {
+					try {
+						echo "Generating the result files"
+						sh """
+							${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/shutdown-vms.sh
+							python3 ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/excel-generator.py ${BUILD_HOME}/${BUILD_NUMBER}/
+							python3 ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/results/add_variance.py ${BUILD_HOME}/${BUILD_NUMBER}/
+						"""
+					}	catch (Exception e) {
+						error "Couldn't capture results"
+					}
+				}
+			}
+		}
+		
+		stage ('Restoring system to original state') {
+			steps {
+				script {
+					try {
+						echo "Moving back to the older state of the system"
+						sh """
+                            kernel_nameo=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/previous-kernel-name)
+                            BASE_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/base-kernel-version)
+                            PATCH_LOCAL_VERSION=\$(cat ${BUILD_HOME}/${BUILD_NUMBER}/lkp-automation-data/state-files/patch-kernel-version)
+                            old_kernel=/boot/vmlinuz-\$kernel_nameo
+                            grubby --set-default=\$old_kernel
+							grub2-mkconfig -o /boot/grub2/grub.cfg
+						"""
+						rebootSystem()
+						sh """
+                            base="/boot/vmlinuz-\$BASE_LOCAL_VERSION"
+                            yum remove \$base -y
+                            patch="/boot/vmlinuz-\$PATCH_LOCAL_VERSION"
+                            yum remove \$patch -y
+                        """
+					}	catch ( Exception e ) {
+						error "couldn't install the old kernel on the system"
+					}
+				}
+			}
+		}	
+    }
+}
+
+def validateCommit(String commitId, String repoPath) {
+    def result = sh(
+        script: """
+            cd "${repoPath}"
+            git rev-parse --quiet --verify ${commitId}^{commit}
+        """,
+        returnStatus: true
+    )
+    if (result != 0) {
+        error "Invalid commit ID: ${commitId} not found in repository"
+    }
+    echo "Commit ${commitId} validated successfully"
+}
+
+def validateVMs(String normalVM, String lkpVM) {
+    def allVMs = sh(
+        script: 'virsh list --all --name',
+        returnStdout: true
+    ).trim().split('\n')
+    
+    def vmList = allVMs as List
+    
+    if (!vmList.contains(normalVM)) {
+        error "Normal VM '${normalVM}' not found in system. Available VMs: ${vmList.join(', ')}"
+    }
+    
+    if (!vmList.contains(lkpVM)) {
+        error "LKP VM '${lkpVM}' not found in system. Available VMs: ${vmList.join(', ')}"
+    }
+    
+    echo "VM validation successful: both ${normalVM} and ${lkpVM} exist"
+}
+
+def validateVMCounts(String numVMs, String numLKPVMs) {
+    try {
+        def normalCount = numVMs as Integer
+        def lkpCount = numLKPVMs as Integer
+        
+        if (normalCount < 1) {
+            error "Number of normal VMs must be greater than 0"
+        }
+        
+        if (lkpCount < 1) {
+            error "Number of LKP VMs must be greater than 0"
+        }
+        
+        echo "VM count validation successful: ${normalCount} normal VMs and ${lkpCount} LKP VMs"
+    } catch (NumberFormatException e) {
+        error "Invalid VM count: must be valid integers"
+    }
+}
+
+def validateAllParameters(Map params, String repoPath) {
+    echo "Starting parameter validation..."
+    
+    // Validate commit ID
+    validateCommit(params.base_commit, repoPath)
+    
+    // Validate VM names
+    validateVMs(params.normal_vm, params.lkp_vm)
+    
+    // Validate VM counts
+    validateVMCounts(params.num_vms, params.num_lkp_vms)
+    
+    echo "All parameters validated successfully"
+}
+
+
+
+
+def rebootSystem() {
+    echo "Initiating system reboot at ${new Date()}"
+    cleanWs()
+    
+    sh 'shutdown -r now'
+    sleep(time: 1, unit: 'MINUTES') // Giving system time to go down
+    
+    def isUp = false
+    def retries = 10
+    while (!isUp && retries > 0) {
+        sleep(time: 30, unit: 'SECONDS')
+        try {
+            def uptime = sh(script: 'uptime', returnStdout: true).trim()
+            isUp = true
+            echo "System is back up: ${uptime}"
+        } catch (Exception e) {
+            retries--
+            echo "Waiting for system to come up... Retries left: ${retries}"
+        }
+    }
+    if (!isUp) {
+        error "System did not come back online in time."
+    }
+    
+    sh 'echo "came up" >> /tmp/reboot-file'
+    echo "Reboot file created successfully."
+	echo "System successfully rebooted."
+}
