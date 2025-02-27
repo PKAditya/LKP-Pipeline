@@ -7,5 +7,6 @@ sudo apt update -y
 sudo apt upgrade -y
 
 # installing dependencies
+sudo apt install ncurses-dev -y
 sudo apt install dwarves -y
 sudo apt install rsync -y
