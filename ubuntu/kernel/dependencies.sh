@@ -10,3 +10,4 @@ sudo apt upgrade -y
 sudo apt install ncurses-dev -y
 sudo apt install dwarves -y
 sudo apt install rsync -y
+sudo apt install virt-install -y

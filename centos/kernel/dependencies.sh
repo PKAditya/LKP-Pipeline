@@ -20,3 +20,4 @@ echo "Installing multiple dependencies required for kernel build"
 sudo yum install gcc gcc-c++ kernel-devel perl make numactl openssl openssl-devel libmpc mpfr libstdc++-devel libtool bison flex zlib zlib-devel ncurses-devel -y &> /dev/null
 
 sudo yum install createrepo rpm-build rpmdevtools -y &> /dev/null
+sudo yum install virt-clone -y &> /dev/null
