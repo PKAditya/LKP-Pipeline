@@ -36,7 +36,7 @@ log "Navigated to the kernel directory"
 log "Configuring the kernel..."
 
 # Create a configuration file to build the kernel
-make olddefconfig || handle_error "Failed to create config file"
+make anolis_defconfig || handle_error "Failed to create config file"
 
 # Change the local version to our own version
 sed -i 's/^CONFIG_LOCALVERSION=.*$/CONFIG_LOCALVERSION="'$name'"/' .config
